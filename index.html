@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网页前端抓取解析工具</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 0 20px;
+      background-color: #f5f5f7;
+      color: #333;
+    }
+    .card {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+    }
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 15px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #0066cc;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button:hover { background: #0052a3; }
+    textarea {
+      width: 100%;
+      height: 300px;
+      font-family: monospace;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+      background: #fafafa;
+    }
+    .log {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-weight: bold;
+      margin-top: 15px;
+      margin-bottom: 5px;
+    }
+    ul {
+      background: #f0f0f0;
+      padding: 10px 30px;
+      border-radius: 6px;
+      max-height: 150px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🌐 前端动态页面抓取工具</h2>
+
+  <div class="card">
+    <div class="input-group">
+      <input type="text" id="targetUrl" value="https://such.qght.cn" placeholder="输入要抓取的网址 (必须带 https://)" />
+      <button onclick="startFetch()">开始抓取</button>
+    </div>
+    <div id="statusLog" class="log">状态：等待操作...</div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">📄 提取到的 HTML 代码：</div>
+    <textarea id="htmlOutput" placeholder="抓取成功后，HTML 源代码将显示在这里..."></textarea>
+    <br/><br/>
+    <button onclick="downloadHtml()">下载 HTML 文件</button>
+
+    <div class="section-title">📦 发现的静态资源列表 (JS/CSS)：</div>
+    <ul id="assetList"><li>尚未发现资源</li></ul>
+  </div>
+
+  <!-- 隐藏的沙盒 iframe，用于加载与渲染目标页面 -->
+  <iframe id="renderFrame" style="display:none;"></iframe>
+
+  <script>
+    async function startFetch() {
+      const url = document.getElementById('targetUrl').value.trim();
+      const log = document.getElementById('statusLog');
+      const output = document.getElementById('htmlOutput');
+      const assetList = document.getElementById('assetList');
+
+      if (!url) {
+        alert('请输入正确的 URL');
+        return;
+      }
+
+      log.innerText = '⏳ 正在通过代理获取源码并尝试渲染...';
+      output.value = '';
+      assetList.innerHTML = '';
+
+      try {
+        // 使用免费 CORS 代理解决纯前端跨域请求限制
+        const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+        const response = await fetch(proxyUrl);
+        
+        if (!response.ok) throw new Error('网络响应异常');
+
+        const htmlText = await response.text();
+        output.value = htmlText;
+
+        // 解析静态资源 (Script & Link 标签)
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlText, 'text/html');
+        
+        const scripts = Array.from(doc.querySelectorAll('script[src]')).map(s => s.getAttribute('src'));
+        const styles = Array.from(doc.querySelectorAll('link[rel="stylesheet"]')).map(l => l.getAttribute('href'));
+        
+        const allAssets = [...scripts, ...styles];
+
+        if (allAssets.length > 0) {
+          assetList.innerHTML = allAssets.map(item => `<li>${item}</li>`).join('');
+        } else {
+          assetList.innerHTML = '<li>未解析到外部 JS/CSS 链接</li>';
+        }
+
+        log.innerText = '✅ 抓取完成！已提取 HTML 结构与资源链接。';
+
+      } catch (err) {
+        log.innerText = '❌ 抓取失败：' + err.message + ' (部分目标网站可能设置了严格的代理拦截)';
+      }
+    }
+
+    function downloadHtml() {
+      const content = document.getElementById('htmlOutput').value;
+      if (!content) {
+        alert('没有可下载的内容');
+        return;
+      }
+      const blob = new Blob([content], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'index.html';
+      a.click();
+    }
+  </script>
+</body>
+</html>
